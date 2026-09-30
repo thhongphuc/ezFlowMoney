@@ -1,0 +1,17 @@
+{
+  "name": "ezFlowMoney - Anti-Budget & Burn-Rate Tracker",
+  "short_name": "ezFlowMoney",
+  "description": "Quản lý tài chính cá nhân thông minh: Safe-to-Spend, Hóa đơn cố định 17 Tr & Tích sản 3 Lọ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0B132B",
+  "theme_color": "#10B981",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

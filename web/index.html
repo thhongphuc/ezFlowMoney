@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ezFlowMoney - Anti-Budget & Burn-Rate Tracker</title>
+  <meta name="description" content="Ứng dụng quản lý tài chính cá nhân thông minh: Daily Safe-to-Spend, Hóa đơn cố định 17 Tr và Tích sản 3 Lọ lãi kép." />
+  <meta name="theme-color" content="#10B981" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" href="./icon.png" />
+  <link rel="apple-touch-icon" href="./icon.png" />
+
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="./style.css">
+
+  <!-- Supabase Cloud Auth & Database SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase.js"></script>
+</head>
+<body>
+
+  <!-- STICKY NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="brand-group" onclick="switchScreen('dashboard')">
+        <img src="./icon.png" alt="ezFlowMoney Logo" class="brand-icon" />
+        <div class="brand-text">
+          <h1>ezFlowMoney</h1>
+          <p>Anti-Budget & Burn-Rate Tracker</p>
+        </div>
+      </div>
+
+      <!-- Desktop Navigation Tabs -->
+      <div class="nav-desktop-tabs">
+        <button class="tab-btn active" data-screen="dashboard" onclick="switchScreen('dashboard')">
+          <i class="fa-solid fa-gauge-high"></i> Tổng quan
+        </button>
+        <button class="tab-btn" data-screen="fixed-bills" onclick="switchScreen('fixed-bills')">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Hóa đơn 17 Tr
+        </button>
+        <button class="tab-btn wealth-tab" data-screen="wealth" onclick="switchScreen('wealth')">
+          <i class="fa-solid fa-piggy-bank"></i> Tích sản 3 Lọ
+        </button>
+        <button class="tab-btn" data-screen="transactions" onclick="switchScreen('transactions')">
+          <i class="fa-solid fa-clock-rotate-left"></i> Giao dịch & SMS
+        </button>
+        <button class="tab-btn" data-screen="settings" onclick="switchScreen('settings')">
+          <i class="fa-solid fa-gear"></i> Cài đặt & Sao lưu
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="nav-actions">
+        <button class="icon-btn" id="btnPrivacy" onclick="togglePrivacyMode()" title="Chế độ riêng tư (Ẩn/Hiện số tiền)">
+          <i class="fa-regular fa-eye"></i>
+        </button>
+
+        <!-- Auth / Cloud Status -->
+        <div id="authNavContainer">
+          <button class="btn-secondary" id="btnOpenAuth" onclick="openAuthModal()" style="padding: 7px 14px; font-size: 12px;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> <span id="authBtnTxt">Đăng nhập</span>
+          </button>
+          <div id="userProfileMenu" class="user-profile-badge" style="display:none;" onclick="openProfileModal()" title="Tài khoản & Đồng bộ đám mây">
+            <span class="avatar-circle" id="userAvatarTxt">U</span>
+            <span class="user-email-txt" id="userEmailTxt">user@email.com</span>
+            <i class="fa-solid fa-cloud" style="color: var(--primary-emerald); font-size: 12px;"></i>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="openModal('quickAddModal')">
+          <i class="fa-solid fa-plus"></i> Ghi nhanh
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="app-container">
+
+    <!-- SUBHEADER CYCLE BANNER -->
+    <section class="cycle-banner">
+      <div class="cycle-info">
+        <div class="cycle-badge">
+          <i class="fa-solid fa-calendar-check"></i>
+          <span id="navCycleTxt">Tháng 09/2026 • Còn 22 ngày</span>
+        </div>
+        <div>
+          <div class="cycle-title">Chu kỳ ngân sách gia đình</div>
+          <div class="cycle-sub">Phân bổ lương 70/30 tự động bảo vệ quỹ tích sản</div>
+        </div>
+      </div>
+      <div class="cycle-actions">
+        <button class="btn-secondary" onclick="openPaydayModal()">
+          <i class="fa-solid fa-sliders"></i> Cấu hình Payday
+        </button>
+      </div>
+    </section>
+
+    <!-- SCREEN 1: DASHBOARD -->
+    <div class="screen-view active" id="screen-dashboard">
+      <div class="dashboard-grid">
+        <!-- LEFT COLUMN: SAFE-TO-SPEND & ALLOCATION -->
+        <div>
+          <!-- Hero Card: Daily Safe-to-Spend -->
+          <div class="hero-card">
+            <div class="hero-header">
+              <div>
+                <div class="hero-subtitle">THE ANTI-BUDGET PHILOSOPHY</div>
+                <div class="hero-title">Daily Safe-to-Spend</div>
+              </div>
+              <div class="status-badge" id="dashStatusBadge">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>An toàn</span>
+              </div>
+            </div>
+
+            <div class="hero-amount-row">
+              <span class="hero-amount" id="dashDailySafe">385.000 ₫</span>
+              <span class="hero-amount-unit">/ ngày hôm nay</span>
+            </div>
+
+            <div class="progress-box">
+              <div class="progress-meta">
+                <span>Đã tiêu: <b id="dashSpentVariable" style="color: var(--text-main);">4.530.000 ₫</b></span>
+                <span>Tốc độ: <b id="dashBurnPct" style="color: var(--status-safe);">35%</b></span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="dashProgressFill" style="width: 35%;"></div>
+              </div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <div class="m-label">Quỹ tự do còn lại</div>
+                <div class="m-val" id="dashRemainingPool" style="color: var(--primary-emerald);">8.470.000 ₫</div>
+              </div>
+              <div class="metric-item">
+                <div class="m-label">Số ngày còn lại</div>
+                <div class="m-val" id="dashDaysLeft">22 ngày</div>
+              </div>
+              <div class="metric-item">
+                <div class="m-label">Hạn mức ban đầu</div>
+                <div class="m-val">433.000 ₫/d</div>
+              </div>
+            </div>
+
+            <div class="hero-footer-tip">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span id="dashHeroTip">Hạn mức tối đa bạn có thể thoải mái chi tiêu hôm nay mà không lo thâm hụt.</span>
+            </div>
+          </div>
+
+          <!-- 70/30 Allocation Breakdown Card -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title"><i class="fa-solid fa-pie-chart" style="color: var(--gold);"></i> Phân bổ lương theo quy tắc 70/30</div>
+                <div class="card-subtitle">Thu nhập tháng: 42.000.000 ₫ • Trích trước tích sản</div>
+              </div>
+              <button class="btn-secondary" style="padding: 6px 12px; font-size: 11px;" onclick="switchScreen('wealth')">
+                Xem 3 Lọ →
+              </button>
+            </div>
+
+            <div class="breakdown-grid">
+              <div class="pill-card" onclick="switchScreen('wealth')">
+                <i class="fa-solid fa-piggy-bank" style="color: var(--gold);"></i>
+                <div class="p-name">1. Tích sản (30%)</div>
+                <div class="p-amount" id="pillSavingsAmt" style="color: var(--gold);">12.0 Tr</div>
+                <div class="p-detail">Tiết kiệm, Vàng, Quỹ mở</div>
+              </div>
+
+              <div class="pill-card" onclick="switchScreen('fixed-bills')">
+                <i class="fa-solid fa-file-invoice-dollar" style="color: #60A5FA;"></i>
+                <div class="p-name">2. Cố định (Bills)</div>
+                <div class="p-amount" id="pillFixedAmt" style="color: #60A5FA;">17.0 Tr</div>
+                <div class="p-detail">Nhà 8M, Học 7.5M, Điện 1.5M</div>
+              </div>
+
+              <div class="pill-card" onclick="switchScreen('transactions')">
+                <i class="fa-solid fa-wallet" style="color: var(--primary-emerald);"></i>
+                <div class="p-name">3. Quỹ tự do</div>
+                <div class="p-amount" id="pillVariableAmt" style="color: var(--primary-emerald);">13.0 Tr</div>
+                <div class="p-detail">Chi tiêu sinh hoạt hàng ngày</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Smart Bank SMS Parser Quick Box -->
+          <div class="bank-parser-box">
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+              <h4 style="font-size: 14px; font-weight: 700; color: var(--primary-emerald); display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-bolt"></i> Bóc Tách Tin Nhắn Ngân Hàng Tức Thì
+              </h4>
+              <span style="font-size: 11px; color: var(--text-muted);">Hỗ trợ VCB, TCB, MB, ACB, MoMo...</span>
+            </div>
+            <textarea id="bankParserInput" class="parser-textarea" placeholder="Dán tin nhắn biến động số dư SMS / App tại đây (vd: VCB Digibank: -8,000,000 VND. ND: Tien nha thang 09)..."></textarea>
+            <div style="display:flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div class="parser-samples">
+                <span class="sample-chip" onclick="pasteSampleMessage('VCB Digibank: -8,000,000 VND. ND: Tien nha thang 09')">🏠 Tiền nhà (-8Tr)</span>
+                <span class="sample-chip" onclick="pasteSampleMessage('MBBank: -7,500,000 VND. ND: Hoc phi mam non 2 be')">🎓 Học phí (-7.5Tr)</span>
+                <span class="sample-chip" onclick="pasteSampleMessage('Techcombank: -8,200,000 VND. ND: Mua 1 chi vang nhan 9999 PNJ')">🪙 Mua vàng (-8.2Tr)</span>
+                <span class="sample-chip" onclick="pasteSampleMessage('VCB Digibank: -65,000 VND. ND: Cafe sang voi dong nghiep')">☕ Cafe (-65k)</span>
+              </div>
+              <button class="btn-primary" onclick="handleParseBankMessage()">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Phân loại & Lưu
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: FIXED BILLS PREVIEW & RECENT TRANSACTIONS -->
+        <div>
+          <!-- Fixed Bills Checklist Preview -->
+          <div class="bills-tracker-card">
+            <div class="card-header">
+              <div>
+                <div class="card-title"><i class="fa-solid fa-list-check" style="color: #60A5FA;"></i> Hóa đơn cố định tháng này (17 Tr)</div>
+                <div class="card-subtitle">Chạm để đánh dấu đã thanh toán</div>
+              </div>
+              <span class="status-badge" id="billsHeaderBadge">Đã trả 8.0 / 17.0 Tr</span>
+            </div>
+
+            <div id="dashBillsList">
+              <!-- Dynamically populated -->
+            </div>
+
+            <div style="margin-top: 14px; text-align: center;">
+              <button class="btn-secondary" style="width: 100%; justify-content: center;" onclick="switchScreen('fixed-bills')">
+                Quản lý chi tiết hóa đơn cố định →
+              </button>
+            </div>
+          </div>
+
+          <!-- Recent Transactions -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title"><i class="fa-solid fa-receipt" style="color: var(--primary-emerald);"></i> Giao dịch gần nhất</div>
+                <div class="card-subtitle">Bấm vào huy hiệu Lọ để đổi phân loại</div>
+              </div>
+              <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px;" onclick="switchScreen('transactions')">
+                Xem tất cả
+              </button>
+            </div>
+
+            <div class="tx-list" id="dashTxList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: FIXED BILLS -->
+    <div class="screen-view" id="screen-fixed-bills">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title" style="font-size: 20px;"><i class="fa-solid fa-file-invoice-dollar" style="color: #60A5FA;"></i> Danh Mục Hóa Đơn Cố Định (Fixed Bills)</div>
+            <div class="card-subtitle">Các khoản chi lớn bắt buộc hàng tháng, đã được khoanh vùng trong gói 17 Triệu</div>
+          </div>
+        </div>
+
+        <div class="metrics-grid" style="margin-bottom: 20px;">
+          <div class="metric-item">
+            <div class="m-label">Tổng hóa đơn dự trù</div>
+            <div class="m-val" id="fbTotalAmt" style="color: #60A5FA;">17.000.000 ₫</div>
+          </div>
+          <div class="metric-item">
+            <div class="m-label">Đã thanh toán</div>
+            <div class="m-val" id="fbPaidAmt" style="color: var(--status-safe);">8.000.000 ₫</div>
+          </div>
+          <div class="metric-item">
+            <div class="m-label">Còn phải trả</div>
+            <div class="m-val" id="fbRemainAmt" style="color: var(--status-warn);">9.000.000 ₫</div>
+          </div>
+        </div>
+
+        <div class="progress-box">
+          <div class="progress-meta">
+            <span>Tiến độ hoàn thành hóa đơn tháng</span>
+            <span id="fbProgPct" style="font-weight: 700; color: #60A5FA;">47%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="fbProgFill" style="width: 47%; background-color: #60A5FA;"></div>
+          </div>
+        </div>
+
+        <div id="fullBillsList" style="margin-top: 16px;">
+          <!-- Dynamically populated -->
+        </div>
+
+        <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 16px; margin-top: 24px; border: 1px solid var(--border);">
+          <h4 style="font-size: 13px; font-weight: 700; color: #60A5FA; margin-bottom: 6px;">
+            <i class="fa-solid fa-shield-halved"></i> Vì sao hóa đơn cố định được tách riêng?
+          </h4>
+          <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            Trong phương pháp Anti-Budget, các chi phí cố định lớn như <b>Tiền nhà (8 Tr)</b> và <b>Học phí 2 con (7.5 Tr)</b> vượt quá hạn mức hàng ngày rất nhiều lần. Nếu gộp chung vào hạn mức ngày, một giao dịch trả tiền nhà sẽ khiến hạn mức ngày bị âm tức thì và gây hoảng loạn giả. Việc tách riêng 17 Tr giúp bạn quản lý hóa đơn rành mạch, bảo vệ trọn vẹn Quỹ tự do 13 Tr!
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: WEALTH (TÍCH SẢN 3 LỌ) -->
+    <div class="screen-view" id="screen-wealth">
+      <!-- Milestone Hero Card -->
+      <div class="hero-card gold-theme">
+        <div class="hero-header">
+          <div>
+            <div class="hero-subtitle" style="color: var(--gold);">HOẠCH ĐỊNH TƯƠNG LAI & LÃI KÉP</div>
+            <div class="hero-title">Tổng Tài Sản Tích Lũy</div>
+            <div class="hero-subtitle" id="wGoalSub" style="color: var(--gold); margin-top: 4px;">Mục tiêu 600 Tr tuổi 40 (8 năm nữa)</div>
+          </div>
+          <div style="display:flex; align-items: center; gap: 8px;">
+            <div class="status-badge" id="wFeasibilityBadge" style="border-color: var(--gold); color: var(--gold); background: rgba(234,179,8,0.15);">
+              Vượt mục tiêu
+            </div>
+            <button class="btn-secondary" style="border-color: var(--gold); color: var(--gold); padding: 6px 12px;" onclick="openGoalModal()" title="Tùy chỉnh mục tiêu">
+              <i class="fa-solid fa-gear"></i> Cấu hình
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-amount-row">
+          <span class="hero-amount gold" id="wCurrentNetWorth">221.740.000 ₫</span>
+        </div>
+
+        <div class="progress-box">
+          <div class="progress-meta">
+            <span>Tiến độ đạt mục tiêu tuổi 40</span>
+            <span id="wProgressPct" style="font-weight: 700; color: var(--gold);">37.0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill gold" id="wProgressFill" style="width: 37%;"></div>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <div class="m-label">Dự kiến tuổi 40 (Lãi kép)</div>
+            <div class="m-val" id="wProjectedFutureVal" style="color: var(--gold);">1.840.000.000 ₫</div>
+          </div>
+          <div class="metric-item">
+            <div class="m-label">Tích sản tháng (30%)</div>
+            <div class="m-val" style="color: var(--primary-emerald);">12.000.000 ₫</div>
+          </div>
+          <div class="metric-item">
+            <div class="m-label">Lợi nhuận bình quân</div>
+            <div class="m-val" id="wAnnualRate" style="color: var(--primary-emerald);">8.0%/năm</div>
+          </div>
+        </div>
+
+        <div class="hero-footer-tip">
+          <i class="fa-solid fa-sparkles" style="color: var(--gold);"></i>
+          <span id="wAdviceTip">Tuyệt vời! Với mức tích sản hiện tại và lãi kép 8.0%/năm, bạn dự kiến sẽ vượt mục tiêu ở tuổi 40.</span>
+        </div>
+      </div>
+
+      <!-- 3 Buckets Mini Summary Cards -->
+      <div class="asset-cards-grid">
+        <div class="asset-bucket-card">
+          <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <i class="fa-solid fa-building-columns" style="font-size: 24px; color: var(--primary-emerald);"></i>
+            <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openAddAssetModal('BANK_SAVINGS')">+ Thêm</button>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);">1. Tiền gửi ngân hàng</div>
+          <div style="font-size: 20px; font-weight: 800; color: var(--primary-emerald); margin: 4px 0;" id="b1Val">120 Tr</div>
+          <div style="font-size: 11px; color: var(--text-dim);">Quỹ khẩn cấp & sinh hoạt an toàn</div>
+        </div>
+
+        <div class="asset-bucket-card gold">
+          <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <i class="fa-solid fa-coins" style="font-size: 24px; color: var(--gold);"></i>
+            <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openAddAssetModal('GOLD_9999')">+ Thêm</button>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);">2. Vàng nhẫn 9999</div>
+          <div style="font-size: 20px; font-weight: 800; color: var(--gold); margin: 4px 0;" id="b2Val">49.2 Tr</div>
+          <div style="font-size: 11px; color: var(--text-dim);">Chống lạm phát & tích lũy dài hạn</div>
+        </div>
+
+        <div class="asset-bucket-card blue">
+          <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <i class="fa-solid fa-chart-line" style="font-size: 24px; color: var(--blue);"></i>
+            <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="openAddAssetModal('FUND_NAV')">+ Thêm</button>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);">3. Quỹ mở NAV</div>
+          <div style="font-size: 20px; font-weight: 800; color: var(--blue); margin: 4px 0;" id="b3Val">52.5 Tr</div>
+          <div style="font-size: 11px; color: var(--text-dim);">Tăng trưởng tài sản theo sức mạnh kinh tế</div>
+        </div>
+      </div>
+
+      <!-- Detailed Assets List -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><i class="fa-solid fa-boxes-stacked" style="color: var(--gold);"></i> Danh Mục Tài Sản Chi Tiết</div>
+            <div class="card-subtitle">Các tài sản hiện hữu trong 3 Lọ của gia đình</div>
+          </div>
+          <button class="btn-gold" onclick="openAddAssetModal()">
+            <i class="fa-solid fa-plus"></i> Thêm tài sản mới
+          </button>
+        </div>
+
+        <div class="tx-list" id="assetListContainer">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Yearly Milestones Roadmap -->
+      <div class="roadmap-container">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><i class="fa-solid fa-chart-line" style="color: var(--primary-emerald);"></i> Lộ Trình Lãi Kép Từng Năm Đến Tuổi Mục Tiêu</div>
+            <div class="card-subtitle">Sức mạnh kỳ diệu của việc tích sản đều đặn và tái đầu tư lợi nhuận</div>
+          </div>
+        </div>
+
+        <div class="roadmap-table-wrap">
+          <table class="roadmap-table">
+            <thead>
+              <tr>
+                <th>Cột mốc</th>
+                <th>Tiền gốc nộp</th>
+                <th>Dự kiến tổng tài sản</th>
+                <th>Lãi kép sinh ra</th>
+              </tr>
+            </thead>
+            <tbody id="roadmapTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: TRANSACTIONS & BANK SMS -->
+    <div class="screen-view" id="screen-transactions">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title" style="font-size: 20px;"><i class="fa-solid fa-clock-rotate-left" style="color: var(--primary-emerald);"></i> Lịch Sử Chi Tiêu & Giao Dịch</div>
+            <div class="card-subtitle">Theo dõi, lọc theo Lọ và bóc tách tin nhắn ngân hàng tự động</div>
+          </div>
+          <button class="btn-primary" onclick="openModal('quickAddModal')">
+            <i class="fa-solid fa-plus"></i> Thêm chi tiêu
+          </button>
+        </div>
+
+        <!-- Filter bar -->
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 20px;">
+          <input type="text" id="txSearchInput" class="form-input" placeholder="Tìm kiếm theo nội dung hoặc nguồn tiền..." oninput="renderTransactionsFull()">
+          <select id="txFilterBucket" class="form-select" style="width: auto; min-width: 170px;" onchange="renderTransactionsFull()">
+            <option value="ALL">Tất cả các Lọ</option>
+            <option value="VARIABLE">Quỹ tự do</option>
+            <option value="FIXED">Cố định (17 Tr)</option>
+            <option value="SAVINGS">Tích sản 3 Lọ</option>
+          </select>
+        </div>
+
+        <div class="tx-list" id="fullTxList">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: SETTINGS & BACKUP -->
+    <div class="screen-view" id="screen-settings">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title" style="font-size: 20px;"><i class="fa-solid fa-gear" style="color: var(--primary-emerald);"></i> Quản Lý Dữ Liệu & Cài Đặt</div>
+            <div class="card-subtitle">Dữ liệu được lưu trữ hoàn toàn cục bộ trên máy của bạn (Local-First Architecture)</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px;">
+          <!-- Export -->
+          <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 20px; border: 1px solid var(--border);">
+            <div style="font-size: 15px; font-weight: 700; color: var(--primary-emerald); margin-bottom: 6px;">
+              <i class="fa-solid fa-download"></i> Sao Lưu Dữ Liệu (Backup JSON)
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+              Tải toàn bộ số liệu, mục tiêu và danh sách giao dịch về máy thành file `.json` để lưu giữ an toàn hoặc chuyển sang thiết bị khác.
+            </p>
+            <button class="btn-primary" onclick="exportDataBackup()">
+              <i class="fa-solid fa-file-export"></i> Tải file sao lưu
+            </button>
+          </div>
+
+          <!-- Import -->
+          <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 20px; border: 1px solid var(--border);">
+            <div style="font-size: 15px; font-weight: 700; color: #60A5FA; margin-bottom: 6px;">
+              <i class="fa-solid fa-upload"></i> Khôi Phục Dữ Liệu (Restore)
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+              Chọn file `.json` đã sao lưu trước đó để nạp lại toàn bộ cấu hình, tài sản và lịch sử chi tiêu.
+            </p>
+            <button class="btn-secondary" onclick="importDataBackup()">
+              <i class="fa-solid fa-file-import"></i> Chọn file khôi phục
+            </button>
+          </div>
+
+          <!-- Reset -->
+          <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 20px; border: 1px solid var(--border);">
+            <div style="font-size: 15px; font-weight: 700; color: var(--status-danger); margin-bottom: 6px;">
+              <i class="fa-solid fa-rotate-left"></i> Đặt Lại Dữ Liệu Mẫu
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+              Khôi phục lại dữ liệu mẫu chuẩn (Lương 42 Tr, Tích sản 12 Tr, Cố định 17 Tr, Quỹ tự do 13 Tr).
+            </p>
+            <button class="btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: var(--status-danger);" onclick="resetToDefaultData()">
+              <i class="fa-solid fa-trash-can"></i> Đặt lại mặc định
+            </button>
+          </div>
+
+          <!-- Cloud Sync & Family Sharing -->
+          <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 20px; border: 1px solid var(--border);">
+            <div style="font-size: 15px; font-weight: 700; color: var(--gold); margin-bottom: 6px;">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Đám Mây Supabase & Phân Quyền
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+              Kết nối dự án Supabase miễn phí của bạn để lưu dữ liệu an toàn trên đám mây, bảo mật tài khoản và chia sẻ ngân sách thời gian thực cho gia đình.
+            </p>
+            <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+              <button class="btn-gold" onclick="openSupabaseConfigModal()">
+                <i class="fa-solid fa-plug"></i> Kết nối Supabase
+              </button>
+              <button class="btn-secondary" onclick="openAuthModal()">
+                <i class="fa-solid fa-user-lock"></i> Đăng nhập / Đăng ký
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Philosophy Guide -->
+        <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 20px; margin-top: 24px; border: 1px solid var(--border);">
+          <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 10px;">
+            <i class="fa-solid fa-book-open" style="color: var(--gold); margin-right: 8px;"></i>
+            Triết lý "The Anti-Budget" dành cho gia đình
+          </h4>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 10px;">
+            Khác với các app kế toán truyền thống bắt bạn nhập từng ly cafe, mớ rau vào hàng chục category rườm rà (rất dễ bỏ cuộc sau 1 tuần), <b>ezFlowMoney</b> hoạt động theo nguyên tắc đơn giản mà bền vững:
+          </p>
+          <ul style="font-size: 13px; color: var(--text-muted); padding-left: 20px; line-height: 1.6;">
+            <li><b>Payday Allocation:</b> Khi lương về (42 Tr), tự động trích 30% (12 Tr) ngay vào 3 Lọ tài sản. Bạn không thể tiêu số tiền bạn đã cất đi.</li>
+            <li><b>Khoanh vùng Fixed Bills:</b> Đưa 17 Tr cố định (tiền nhà, học phí, điện nước) vào danh sách riêng. Các khoản này không làm ảnh hưởng đến hạn mức chi tiêu mỗi ngày.</li>
+            <li><b>Safe-to-Spend:</b> Toàn bộ số tiền còn lại (13 Tr) trở thành Quỹ tự do. App chỉ tính duy nhất một con số: <i>Hôm nay bạn được tiêu bao nhiêu?</i> Miễn là bạn không vượt con số này, bạn tự do 100%!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MOBILE BOTTOM BAR -->
+  <nav class="mobile-bottom-bar">
+    <button class="mob-tab-btn active" data-screen="dashboard" onclick="switchScreen('dashboard')">
+      <i class="fa-solid fa-gauge-high"></i>
+      <span>Tổng quan</span>
+    </button>
+    <button class="mob-tab-btn" data-screen="fixed-bills" onclick="switchScreen('fixed-bills')">
+      <i class="fa-solid fa-file-invoice-dollar"></i>
+      <span>Hóa đơn 17M</span>
+    </button>
+    <button class="mob-tab-btn wealth" data-screen="wealth" onclick="switchScreen('wealth')">
+      <i class="fa-solid fa-piggy-bank"></i>
+      <span>Tích sản 3 Lọ</span>
+    </button>
+    <button class="mob-tab-btn" data-screen="transactions" onclick="switchScreen('transactions')">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+      <span>Giao dịch</span>
+    </button>
+    <button class="mob-tab-btn" data-screen="settings" onclick="switchScreen('settings')">
+      <i class="fa-solid fa-gear"></i>
+      <span>Cài đặt</span>
+    </button>
+  </nav>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastMsg" class="toast-msg"></div>
+
+  <!-- MODAL: QUICK ADD -->
+  <div class="modal-overlay" id="quickAddModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Ghi Nhanh Chi Tiêu</div>
+          <div class="modal-desc">Dành cho tiền mặt hoặc các khoản phát sinh</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('quickAddModal')">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Số tiền (VNĐ)</label>
+        <input type="number" id="qaAmount" class="form-input" placeholder="Ví dụ: 45000">
+      </div>
+
+      <div class="form-group">
+        <label>Nội dung chi tiêu</label>
+        <input type="text" id="qaNote" class="form-input" placeholder="Ví dụ: Ăn sáng, xăng xe...">
+      </div>
+
+      <div class="form-group">
+        <label>Phân loại vào Lọ</label>
+        <select id="qaBucket" class="form-select">
+          <option value="VARIABLE">Quỹ tự do (Safe-to-Spend)</option>
+          <option value="FIXED">Chi phí cố định (Fixed Bills)</option>
+          <option value="SAVINGS">Tích sản 3 Lọ</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Nguồn thanh toán</label>
+        <select id="qaSource" class="form-select">
+          <option value="Tiền mặt">Tiền mặt</option>
+          <option value="Chuyển khoản">Chuyển khoản</option>
+          <option value="Thẻ tín dụng">Thẻ tín dụng</option>
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('quickAddModal')">Hủy</button>
+        <button class="btn-primary" onclick="handleApplyQuickAdd()">Lưu Chi Tiêu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PAYDAY CONFIG -->
+  <div class="modal-overlay" id="paydayModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Phân Bổ Lương 70/30 (Payday)</div>
+          <div class="modal-desc">Triết lý Anti-Budget: Tách riêng tích sản và cố định</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('paydayModal')">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Tổng thu nhập tháng (VNĐ)</label>
+        <input type="number" id="pdIncome" class="form-input" value="42000000" oninput="calcPaydayPreview()">
+      </div>
+
+      <div class="form-group">
+        <label>Chi phí cố định tháng (Fixed Bills)</label>
+        <input type="number" id="pdFixed" class="form-input" value="17000000" oninput="calcPaydayPreview()">
+        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Gồm tiền nhà 8M + học phí 2 bé 7.5M + điện nước 1.5M</span>
+      </div>
+
+      <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px; border: 1px solid var(--border);">
+        <div style="display:flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <span style="color: var(--gold); font-weight: 600;">1. Tích sản (30%):</span>
+          <b id="pdPreviewSavings" style="color: var(--gold);">12.000.000 ₫</b>
+        </div>
+        <div style="display:flex; justify-content: space-between; font-size: 13px;">
+          <span style="color: var(--primary-emerald); font-weight: 600;">2. Quỹ tự do cả tháng:</span>
+          <b id="pdPreviewVariable" style="color: var(--primary-emerald);">13.000.000 ₫</b>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('paydayModal')">Hủy</button>
+        <button class="btn-primary" onclick="handleApplyPayday()">Kích Hoạt Chu Kỳ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: WEALTH GOAL -->
+  <div class="modal-overlay" id="goalModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Cấu Hình Mục Tiêu & Lãi Kép</div>
+          <div class="modal-desc">Hoạch định theo năm sinh và sức mạnh lãi kép</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('goalModal')">&times;</button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label>Năm sinh của bạn</label>
+          <input type="number" id="gBirthYear" class="form-input" value="1994" oninput="calcGoalPreview()">
+        </div>
+        <div class="form-group">
+          <label>Độ tuổi mục tiêu</label>
+          <input type="number" id="gTargetAge" class="form-input" value="40" oninput="calcGoalPreview()">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Số tiền mục tiêu (VNĐ)</label>
+        <input type="number" id="gTargetAmount" class="form-input" value="600000000" oninput="calcGoalPreview()">
+        <div style="display:flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+          <span class="sample-chip" onclick="setPresetGoalAmount(500000000)">500 Tr</span>
+          <span class="sample-chip" onclick="setPresetGoalAmount(600000000)">600 Tr</span>
+          <span class="sample-chip" onclick="setPresetGoalAmount(1000000000)">1 Tỷ</span>
+          <span class="sample-chip" onclick="setPresetGoalAmount(2000000000)">2 Tỷ</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div style="display:flex; justify-content: space-between;">
+          <label>Lợi nhuận bình quân 3 Lọ (%/năm)</label>
+          <span id="gReturnRateVal" style="font-weight: 700; color: var(--primary-emerald); font-size: 13px;">8.0%</span>
+        </div>
+        <input type="range" id="gReturnRate" min="4" max="15" step="0.5" value="8" style="width: 100%; accent-color: var(--primary-emerald);" oninput="calcGoalPreview()">
+        <span style="font-size: 11px; color: var(--text-muted);">Tiền gửi ~5% • Vàng ~8% • Quỹ mở ~12%</span>
+      </div>
+
+      <div style="background: var(--bg-inner); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border);">
+        <div style="display:flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <span>Dự phóng tương lai:</span>
+          <b id="gPreviewFutureVal" style="color: var(--gold);">1.840.000.000 ₫</b>
+        </div>
+        <div style="display:flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+          <span>Tích sản tháng cần:</span>
+          <b id="gPreviewRequiredPmt" style="color: var(--primary-emerald);">2.150.000 ₫</b>
+        </div>
+        <div id="gPreviewTip" style="font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">
+          Tuyệt vời! Kế hoạch này giúp bạn vượt mục tiêu đề ra.
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('goalModal')">Hủy</button>
+        <button class="btn-gold" onclick="handleApplyGoal()">Lưu Cấu Hình</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD ASSET -->
+  <div class="modal-overlay" id="addAssetModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Thêm Tài Sản Tích Lũy</div>
+          <div class="modal-desc">Phân loại vào 1 trong 3 Lọ tài sản gia đình</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('addAssetModal')">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Lọ tài sản</label>
+        <select id="astBucket" class="form-select" onchange="onAssetBucketSelect()">
+          <option value="BANK_SAVINGS">1. Sổ tiết kiệm ngân hàng</option>
+          <option value="GOLD_9999">2. Vàng nhẫn 9999 (theo chỉ)</option>
+          <option value="FUND_NAV">3. Chứng chỉ quỹ mở (theo NAV)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Tên tài sản</label>
+        <input type="text" id="astName" class="form-input" value="Sổ tiết kiệm kỳ hạn 12 tháng">
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label id="astUnitsLabel">Số lượng (Sổ)</label>
+          <input type="number" id="astUnits" class="form-input" value="1" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Đơn giá (VNĐ)</label>
+          <input type="number" id="astUnitPrice" class="form-input" value="50000000">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('addAssetModal')">Hủy</button>
+        <button class="btn-gold" onclick="handleApplyAddAsset()">Lưu Tài Sản</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BUCKET SWITCHER -->
+  <div class="modal-overlay" id="bucketModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Phân Loại Vào Lọ Ngân Sách</div>
+          <div class="modal-desc" id="bModalDesc">Chọn Lọ cho khoản chi này</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('bucketModal')">&times;</button>
+      </div>
+
+      <div class="bucket-option" id="optVar" onclick="selectBucket('VARIABLE')">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(16,185,129,0.15); display:flex; align-items:center; justify-content:center; color: var(--primary-emerald); font-size: 18px;">
+          <i class="fa-solid fa-wallet"></i>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 14px; color: var(--primary-emerald);">Quỹ Chi Tiêu Tự Do (Variable)</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Trừ trực tiếp vào hạn mức Safe-to-Spend hàng ngày</div>
+        </div>
+      </div>
+
+      <div class="bucket-option" id="optFix" onclick="selectBucket('FIXED')">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(56,189,248,0.15); display:flex; align-items:center; justify-content:center; color: #38bdf8; font-size: 18px;">
+          <i class="fa-solid fa-receipt"></i>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 14px; color: #38bdf8;">Chi Phí Cố Định (Fixed Bills 17 Tr)</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Không trừ hạn mức ngày • Đã dự trù trong gói 17 Tr</div>
+        </div>
+      </div>
+
+      <div class="bucket-option" id="optSav" onclick="selectBucket('SAVINGS')">
+        <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(234,179,8,0.15); display:flex; align-items:center; justify-content:center; color: var(--gold); font-size: 18px;">
+          <i class="fa-solid fa-piggy-bank"></i>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 14px; color: var(--gold);">Tích Sản 3 Lọ (Savings)</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Gửi tiết kiệm, mua vàng hoặc CCQ đầu tư</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal('bucketModal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTHENTICATION (LOGIN / REGISTER) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="authModalTitle">Tài Khoản & Đám Mây</div>
+          <div class="modal-desc">Đồng bộ an toàn • Bảo mật dữ liệu riêng tư</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('authModal')">&times;</button>
+      </div>
+
+      <!-- Auth Tabs: Login vs Register -->
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" id="tabBtnLogin" onclick="switchAuthTab('login')">
+          <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
+        </button>
+        <button class="auth-tab-btn" id="tabBtnRegister" onclick="switchAuthTab('register')">
+          <i class="fa-solid fa-user-plus"></i> Đăng ký
+        </button>
+      </div>
+
+      <div id="authNoticeBox" style="font-size: 12px; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: none;"></div>
+
+      <div class="form-group">
+        <label>Email tài khoản</label>
+        <input type="email" id="authEmail" class="form-input" placeholder="tenban@gmail.com" required>
+      </div>
+
+      <div class="form-group">
+        <label>Mật khẩu (ít nhất 6 ký tự)</label>
+        <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 18px;">
+        <button class="btn-secondary" onclick="closeModal('authModal')">Hủy</button>
+        <button class="btn-primary" id="btnAuthSubmit" onclick="handleAuthSubmit()">
+          <i class="fa-solid fa-arrow-right"></i> Tiếp tục
+        </button>
+      </div>
+
+      <div class="divider-or">
+        <span>HOẶC</span>
+      </div>
+
+      <button type="button" class="btn-google" onclick="handleGoogleLogin()">
+        <svg width="18" height="18" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        Đăng nhập với Google
+      </button>
+
+      <div style="margin-top: 18px; text-align: center;">
+        <a href="javascript:void(0)" onclick="openSupabaseConfigModal(); closeModal('authModal');" style="font-size: 12px; color: var(--gold); text-decoration: underline;">
+          <i class="fa-solid fa-sliders"></i> Cài đặt URL / Anon Key kết nối Supabase Cloud
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SUPABASE CONFIGURATION -->
+  <div class="modal-overlay" id="supabaseConfigModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Cấu Hình Kết Nối Supabase</div>
+          <div class="modal-desc">Kết nối cơ sở dữ liệu đám mây PostgreSQL miễn phí</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('supabaseConfigModal')">&times;</button>
+      </div>
+
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
+        <i class="fa-solid fa-circle-info" style="color: var(--primary-emerald); margin-right: 4px;"></i>
+        Lấy thông tin tại: <b>Supabase Dashboard &rarr; Project Settings &rarr; API</b>.<br>
+        Hoàn toàn miễn phí trọn đời (500MB DB, 50,000 active users, Realtime sync).
+      </div>
+
+      <div class="form-group">
+        <label>Supabase Project URL</label>
+        <input type="url" id="sbProjectUrl" class="form-input" placeholder="https://your-project-id.supabase.co">
+      </div>
+
+      <div class="form-group">
+        <label>Supabase Anon Key (Public Key)</label>
+        <input type="text" id="sbAnonKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+      </div>
+
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button class="btn-secondary" onclick="closeModal('supabaseConfigModal')">Hủy</button>
+        <button class="btn-primary" onclick="handleSaveSupabaseConfig()">
+          <i class="fa-solid fa-floppy-disk"></i> Lưu & Kích Hoạt
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: USER PROFILE & FAMILY SHARING -->
+  <div class="modal-overlay" id="profileModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Hồ Sơ Đám Mây & Phân Quyền</div>
+          <div class="modal-desc">Quản lý phiên đăng nhập và chia sẻ gia đình</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('profileModal')">&times;</button>
+      </div>
+
+      <!-- User Card -->
+      <div style="display:flex; align-items:center; gap: 14px; background: var(--bg-inner); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 18px; border: 1px solid var(--border);">
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-emerald), #047857); display:flex; align-items:center; justify-content:center; font-size: 20px; font-weight: 800; color: white;" id="modalAvatarTxt">U</div>
+        <div style="flex: 1; overflow: hidden;">
+          <div style="font-weight: 700; font-size: 15px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="modalUserEmail">user@email.com</div>
+          <div style="display:flex; align-items:center; gap: 6px; font-size: 11px; color: var(--primary-emerald); margin-top: 2px;">
+            <i class="fa-solid fa-shield-halved"></i> Đã kích hoạt Row Level Security (RLS)
+          </div>
+        </div>
+      </div>
+
+      <!-- Family Sharing Box -->
+      <div class="family-box">
+        <div style="font-weight: 700; font-size: 14px; color: #38bdf8; display:flex; align-items:center; gap: 8px; margin-bottom: 4px;">
+          <i class="fa-solid fa-people-roof"></i> Chia sẻ ngân sách Gia Đình (Vợ / Chồng)
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">
+          Nhập cùng một <b>Mã Gia Đình bí mật</b> trên điện thoại của vợ và chồng để dùng chung một ví, tự động đồng bộ chi tiêu thời gian thực!
+        </div>
+        <div style="display:flex; gap: 8px;">
+          <input type="text" id="familyCodeInput" class="form-input" placeholder="VD: GDFAMILY2026" style="text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">
+          <button class="btn-primary" onclick="handleSaveFamilyCode()" style="white-space: nowrap;">
+            <i class="fa-solid fa-check"></i> Lưu Mã
+          </button>
+        </div>
+      </div>
+
+      <!-- Sync Now & Actions -->
+      <div style="display:flex; gap: 10px; margin-top: 20px;">
+        <button class="btn-primary" style="flex: 1;" onclick="handleManualCloudSync()">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Đồng bộ ngay
+        </button>
+        <button class="btn-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: var(--status-danger);" onclick="handleSignOut()">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Đăng xuất
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

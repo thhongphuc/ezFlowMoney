@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Anti-Budget</string>
+    <string name="widget_name">Safe-to-Spend Widget</string>
+    <string name="widget_description">Hiển thị hạn mức chi tiêu an toàn hàng ngày</string>
+</resources>
