@@ -56,12 +56,15 @@ class SupabaseService {
     return !!(this.getUrl() && this.getAnonKey());
   }
 
+  static DEFAULT_URL = 'https://ukosxndhvlaiahureuep.supabase.co';
+  static DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrb3N4bmRodmxhaWFodXJldWVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NTM4NDEsImV4cCI6MjEwNjMyOTg0MX0.zw0LyAewMSnp5JjlF84AHDHzB4ixKcOp1RewLqsCOuM';
+
   static getUrl() {
-    return localStorage.getItem(this.CLIENT_URL_KEY) || '';
+    return localStorage.getItem(this.CLIENT_URL_KEY) || this.DEFAULT_URL;
   }
 
   static getAnonKey() {
-    return localStorage.getItem(this.CLIENT_ANON_KEY) || '';
+    return localStorage.getItem(this.CLIENT_ANON_KEY) || this.DEFAULT_ANON_KEY;
   }
 
   static saveConfig(url, key) {

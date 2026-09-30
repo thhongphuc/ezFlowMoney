@@ -46,43 +46,61 @@ create table if not exists public.user_finance_data (
 -- 2. Kích hoạt Row Level Security (RLS) để phân quyền chặt chẽ từng User
 alter table public.user_finance_data enable row level security;
 
--- 3. Tạo chính sách bảo mật (Security Policies):
+-- 3. Hàm hỗ trợ đọc Mã Gia Đình an toàn (tránh đệ quy vô hạn trong RLS)
+create or replace function public.get_my_family_code()
+returns text as $$
+    select family_code from public.user_finance_data where user_id = auth.uid() limit 1;
+$$ language sql security definer stable;
+
+-- 4. Tạo chính sách bảo mật (Security Policies):
 -- Người dùng chỉ được xem/sửa dữ liệu của chính mình (hoặc gia đình có chung mã family_code)
 
--- Policy: Cho phép người dùng đọc dữ liệu của mình (hoặc người cùng family_code)
+drop policy if exists "Users can select own data or family data" on public.user_finance_data;
 create policy "Users can select own data or family data" 
 on public.user_finance_data for select 
 using (
     auth.uid() = user_id 
     or (
         family_code is not null 
-        and family_code = (select u.family_code from public.user_finance_data u where u.user_id = auth.uid())
+        and family_code = public.get_my_family_code()
     )
 );
 
 -- Policy: Cho phép người dùng thêm mới bản ghi của chính mình
+drop policy if exists "Users can insert own data" on public.user_finance_data;
 create policy "Users can insert own data" 
 on public.user_finance_data for insert 
 with check (auth.uid() = user_id);
 
 -- Policy: Cho phép người dùng cập nhật dữ liệu của mình (hoặc cùng family_code)
+drop policy if exists "Users can update own data or family data" on public.user_finance_data;
 create policy "Users can update own data or family data" 
 on public.user_finance_data for update 
 using (
     auth.uid() = user_id 
     or (
         family_code is not null 
-        and family_code = (select u.family_code from public.user_finance_data u where u.user_id = auth.uid())
+        and family_code = public.get_my_family_code()
     )
 );
 
 -- Policy: Cho phép người dùng xóa dữ liệu của mình
+drop policy if exists "Users can delete own data" on public.user_finance_data;
 create policy "Users can delete own data" 
 on public.user_finance_data for delete 
 using (auth.uid() = user_id);
 
--- 4. Bật tính năng Real-time để khi vợ/chồng thêm giao dịch, máy người kia tự cập nhật ngay lập tức
-alter publication supabase_realtime add table public.user_finance_data;
+-- 5. Bật tính năng Real-time để khi vợ/chồng thêm giao dịch, máy người kia tự cập nhật ngay lập tức
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and tablename = 'user_finance_data'
+  ) then
+    alter publication supabase_realtime add table public.user_finance_data;
+  end if;
+end;
+$$;
 
 -- 5. Tự động khởi tạo dữ liệu mẫu khi người dùng mới đăng ký tài khoản (Trigger)
 create or replace function public.handle_new_user()
